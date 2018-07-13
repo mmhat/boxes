@@ -385,37 +385,39 @@ render = cntUnlines . renderBox
 
 -- XXX make QC properties for takeP
 
--- | \"Padded take\": @takePr a n xs@ is the same as @take n xs@, if @n
+-- | @justifyLeft a n xs@ left-justifies @xs@ to the given length @n@, using the specified fill character @a@.
+justifyLeft :: IsContent a => Char -> Int -> a -> a
+justifyLeft _ n _ | n <= 0 = mempty
+justifyLeft b n x = let y = cntTake n x in mappend (cntReplicate (n - cntLength y) b) y
+
+-- | @justifyRight a n xs@ right-justifies @xs@ to the given length @n@, using the specified fill character @a@.
+justifyRight :: IsContent a => Char -> Int -> a -> a
+justifyRight _ n _ | n <= 0 = mempty
+justifyRight b n x = let y = cntTake n x in mappend y $ cntReplicate (n - cntLength y) b
+
+-- | \"Padded take\": @takeP a n xs@ is the same as @take n xs@, if @n
 --   <= length xs@; otherwise it is @xs@ followed by enough copies of
 --   @a@ to make the length equal to @n@.
-takePr :: IsContent a => Char -> Int -> a -> a
-takePr _ n _ | n <= 0 = mempty
-takePr b n x = let y = cntTake n x in mappend y $ cntReplicate (n - cntLength y) b
+takeP :: a -> Int -> [a] -> [a]
+takeP _ n _      | n <= 0 = []
+takeP b n []              = replicate n b
+takeP b n (x:xs)          = x : takeP b (n-1) xs
 
--- | Like @takePl a n xs@ is like @takePr a n xs@, but prepends the copies of @a@.
-takePl :: IsContent a => Char -> Int -> a -> a
-takePl _ n _ | n <= 0 = mempty
-takePl b n x = let y = cntTake n x in mappend (cntReplicate (n - cntLength y) b) y
-
--- | Like 'takeP', but for lists.
-takeP' :: a -> Int -> [a] -> [a]
-takeP' _ n _      | n <= 0 = []
-takeP' b n []              = replicate n b
-takeP' b n (x:xs)          = x : takeP' b (n-1) xs
-
--- | @takePA @ is like 'takeP', but with alignment.  That is, we
+-- | @justify algn a n xs@ is like 'takeP, but with alignment.  That is, we
 --   imagine a copy of @xs@ extended infinitely on both sides with
 --   copies of @a@, and a window of size @n@ placed so that @xs@ has
---   the specified alignment within the window; @takePA algn a n xs@
---   returns the contents of this window.
-takePA :: IsContent a => Alignment -> Char -> Int -> a -> a
-takePA c b n = glue . (takePl b (numRev c n) *** takePr b (numFwd c n)) . split
+--   the specified alignment within the window; It returns the contents of this window.
+justify :: IsContent a => Alignment -> Char -> Int -> a -> a
+justify c b n = glue . (justifyLeft b (numRev c n) *** justifyRight b (numFwd c n)) . split
   where split t = cntSplitAt (numRev c (cntLength t)) $ t
         glue    = uncurry mappend
 
--- | Like 'takePA', but for lists.
-takePA' :: Alignment -> a -> Int -> [a] -> [a]
-takePA' c b n = glue . (takeP' b (numRev c n) *** takeP' b (numFwd c n)) . split
+-- | @takePA a n xs@ is like 'takeP', but with alignment.  That is, we
+--   imagine a copy of @xs@ extended infinitely on both sides with
+--   copies of @a@, and a window of size @n@ placed so that @xs@ has
+--   the specified alignment within the window; @justify algn a n xs@
+takePA :: Alignment -> a -> Int -> [a] -> [a]
+takePA c b n = glue . (takeP b (numRev c n) *** takeP b (numFwd c n)) . split
   where split t = first reverse . splitAt (numRev c (length t)) $ t
         glue    = uncurry (++) . first reverse
 
@@ -463,11 +465,11 @@ renderBoxWithCols c b = renderBox (b{cols = c})
 
 -- | Resize a rendered list of lines.
 resizeBox :: IsContent a => Int -> Int -> [a] -> [a]
-resizeBox r c = takeP' (blanks c) r . map (takePr ' ' c)
+resizeBox r c = takeP (blanks c) r . map (justifyRight ' ' c)
 
 -- | Resize a rendered list of lines, using given alignments.
 resizeBoxAligned :: IsContent a => Int -> Int -> Alignment -> Alignment -> [a] -> [a]
-resizeBoxAligned r c ha va = takePA' va (blanks c) r . map (takePA ha ' ' c)
+resizeBoxAligned r c ha va = takePA va (blanks c) r . map (justify ha ' ' c)
 
 -- | A convenience function for rendering a box to stdout.
 printBox :: Box String -> IO ()
