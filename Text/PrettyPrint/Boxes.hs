@@ -107,7 +107,6 @@ import Data.List.Split (chunksOf)
 class Monoid a => IsContent a where
     cntLength :: a -> Int
     cntReplicate :: Int -> Char -> a
-    cntReverse :: a -> a
     cntSingleton :: Char -> a
     cntSplitAt :: Int -> a -> (a, a)
     cntTake :: Int -> a -> a
@@ -118,7 +117,6 @@ class Monoid a => IsContent a where
 instance IsContent String where
     cntLength = length
     cntReplicate = replicate
-    cntReverse = reverse
     cntSingleton = (:[])
     cntSplitAt = splitAt
     cntTake = take
@@ -175,7 +173,7 @@ center2    = AlignCenter2
 
 -- | Contents of a box.
 data Content a = Blank        -- ^ No content.
-               | Text a       -- ^ A raw string.
+               | Text a       -- ^ The raw content of the box.
                | Row [Box a]  -- ^ A row of sub-boxes.
                | Col [Box a]  -- ^ A column of sub-boxes.
                | SubBox Alignment Alignment (Box a)
@@ -380,20 +378,26 @@ moveRight n b = alignHoriz right (cols b + n) b
 --  Implementation  ------------------------------------------------------------
 --------------------------------------------------------------------------------
 
--- | Render a 'Box' as a String, suitable for writing to the screen or
+-- | Render a 'Box', suitable for writing to the screen or
 --   a file.
 render :: IsContent a => Box a -> a
 render = cntUnlines . renderBox
 
 -- XXX make QC properties for takeP
 
--- | \"Padded take\": @takeP a n xs@ is the same as @take n xs@, if @n
+-- | \"Padded take\": @takePr a n xs@ is the same as @take n xs@, if @n
 --   <= length xs@; otherwise it is @xs@ followed by enough copies of
 --   @a@ to make the length equal to @n@.
-takeP :: IsContent a => Char -> Int -> a -> a
-takeP _ n _      | n <= 0 = mempty
-takeP b n x = let y = cntTake n x in mappend y $ cntReplicate (n - cntLength y) b
+takePr :: IsContent a => Char -> Int -> a -> a
+takePr _ n _ | n <= 0 = mempty
+takePr b n x = let y = cntTake n x in mappend y $ cntReplicate (n - cntLength y) b
 
+-- | Like @takePl a n xs@ is like @takePr a n xs@, but prepends the copies of @a@.
+takePl :: IsContent a => Char -> Int -> a -> a
+takePl _ n _ | n <= 0 = mempty
+takePl b n x = let y = cntTake n x in mappend (cntReplicate (n - cntLength y) b) y
+
+-- | Like 'takeP', but for lists.
 takeP' :: a -> Int -> [a] -> [a]
 takeP' _ n _      | n <= 0 = []
 takeP' b n []              = replicate n b
@@ -405,15 +409,17 @@ takeP' b n (x:xs)          = x : takeP' b (n-1) xs
 --   the specified alignment within the window; @takePA algn a n xs@
 --   returns the contents of this window.
 takePA :: IsContent a => Alignment -> Char -> Int -> a -> a
-takePA c b n = glue . (takeP b (numRev c n) *** takeP b (numFwd c n)) . split
-  where split t = first cntReverse . cntSplitAt (numRev c (cntLength t)) $ t
-        glue    = uncurry mappend . first cntReverse
+takePA c b n = glue . (takePl b (numRev c n) *** takePr b (numFwd c n)) . split
+  where split t = cntSplitAt (numRev c (cntLength t)) $ t
+        glue    = uncurry mappend
 
+-- | Like 'takePA', but for lists.
 takePA' :: Alignment -> a -> Int -> [a] -> [a]
 takePA' c b n = glue . (takeP' b (numRev c n) *** takeP' b (numFwd c n)) . split
   where split t = first reverse . splitAt (numRev c (length t)) $ t
         glue    = uncurry (++) . first reverse
 
+numFwd, numRev :: Alignment -> Int -> Int
 numFwd AlignFirst    n = n
 numFwd AlignLast     _ = 0
 numFwd AlignCenter1  n = n `div` 2
@@ -457,7 +463,7 @@ renderBoxWithCols c b = renderBox (b{cols = c})
 
 -- | Resize a rendered list of lines.
 resizeBox :: IsContent a => Int -> Int -> [a] -> [a]
-resizeBox r c = takeP' (blanks c) r . map (takeP ' ' c)
+resizeBox r c = takeP' (blanks c) r . map (takePr ' ' c)
 
 -- | Resize a rendered list of lines, using given alignments.
 resizeBoxAligned :: IsContent a => Int -> Int -> Alignment -> Alignment -> [a] -> [a]
