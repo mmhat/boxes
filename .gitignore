@@ -8,3 +8,4 @@
 *.dyn_o
 /dist
 cabal.sandbox.config
+.stack-work/
