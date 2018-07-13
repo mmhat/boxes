@@ -105,20 +105,26 @@ import Data.List (foldl', intersperse)
 import Data.List.Split (chunksOf)
 
 class Monoid a => IsContent a where
+    -- | @cntJustify algn a n xs@ is like 'justifyLeft' and 'justifyRight' combined with alignment.
+    cntJustify :: Alignment -> Char -> Int -> a -> a
+
     cntLength :: a -> Int
-    cntReplicate :: Int -> Char -> a
     cntSingleton :: Char -> a
-    cntSplitAt :: Int -> a -> (a, a)
     cntTake :: Int -> a -> a
     cntUnlines :: [a] -> a
     cntUnwords :: [a] -> a
     cntWords :: a -> [a]
 
 instance IsContent String where
+    cntJustify c b n = glue . (jl (numRev c n) *** jr (numFwd c n)) . split
+      where split t = splitAt (numRev c (length t)) $ t
+            glue    = uncurry mappend
+            jl n' _ | n' <= 0 = mempty
+            jl n' x = let y = take n' x in replicate (n' - length y) b ++ y
+            jr n' _ | n' <= 0 = mempty
+            jr n' x = let y = take n' x in y ++ replicate (n' - length y) b
     cntLength = length
-    cntReplicate = replicate
     cntSingleton = (:[])
-    cntSplitAt = splitAt
     cntTake = take
     cntUnlines = unlines
     cntUnwords = unwords
@@ -385,16 +391,6 @@ render = cntUnlines . renderBox
 
 -- XXX make QC properties for takeP
 
--- | @justifyLeft a n xs@ left-justifies @xs@ to the given length @n@, using the specified fill character @a@.
-justifyLeft :: IsContent a => Char -> Int -> a -> a
-justifyLeft _ n _ | n <= 0 = mempty
-justifyLeft b n x = let y = cntTake n x in mappend (cntReplicate (n - cntLength y) b) y
-
--- | @justifyRight a n xs@ right-justifies @xs@ to the given length @n@, using the specified fill character @a@.
-justifyRight :: IsContent a => Char -> Int -> a -> a
-justifyRight _ n _ | n <= 0 = mempty
-justifyRight b n x = let y = cntTake n x in mappend y $ cntReplicate (n - cntLength y) b
-
 -- | \"Padded take\": @takeP a n xs@ is the same as @take n xs@, if @n
 --   <= length xs@; otherwise it is @xs@ followed by enough copies of
 --   @a@ to make the length equal to @n@.
@@ -402,15 +398,6 @@ takeP :: a -> Int -> [a] -> [a]
 takeP _ n _      | n <= 0 = []
 takeP b n []              = replicate n b
 takeP b n (x:xs)          = x : takeP b (n-1) xs
-
--- | @justify algn a n xs@ is like 'takeP, but with alignment.  That is, we
---   imagine a copy of @xs@ extended infinitely on both sides with
---   copies of @a@, and a window of size @n@ placed so that @xs@ has
---   the specified alignment within the window; It returns the contents of this window.
-justify :: IsContent a => Alignment -> Char -> Int -> a -> a
-justify c b n = glue . (justifyLeft b (numRev c n) *** justifyRight b (numFwd c n)) . split
-  where split t = cntSplitAt (numRev c (cntLength t)) $ t
-        glue    = uncurry mappend
 
 -- | @takePA a n xs@ is like 'takeP', but with alignment.  That is, we
 --   imagine a copy of @xs@ extended infinitely on both sides with
@@ -433,7 +420,7 @@ numRev AlignCenter2  n = n `div` 2
 
 -- | Generate a string of spaces.
 blanks :: IsContent a => Int -> a
-blanks = flip cntReplicate ' '
+blanks n = cntJustify AlignCenter1 ' ' n mempty
 
 -- | Render a box as a list of lines.
 renderBox :: IsContent a => Box a -> [a]
@@ -465,11 +452,11 @@ renderBoxWithCols c b = renderBox (b{cols = c})
 
 -- | Resize a rendered list of lines.
 resizeBox :: IsContent a => Int -> Int -> [a] -> [a]
-resizeBox r c = takeP (blanks c) r . map (justifyRight ' ' c)
+resizeBox r c = takeP (blanks c) r . map (cntJustify AlignFirst ' ' c)
 
 -- | Resize a rendered list of lines, using given alignments.
 resizeBoxAligned :: IsContent a => Int -> Int -> Alignment -> Alignment -> [a] -> [a]
-resizeBoxAligned r c ha va = takePA va (blanks c) r . map (justify ha ' ' c)
+resizeBoxAligned r c ha va = takePA va (blanks c) r . map (cntJustify ha ' ' c)
 
 -- | A convenience function for rendering a box to stdout.
 printBox :: Box String -> IO ()
