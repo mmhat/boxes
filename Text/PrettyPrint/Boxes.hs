@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 #include "boxes.h"
 
 -----------------------------------------------------------------------------
@@ -31,7 +32,7 @@ module Text.PrettyPrint.Boxes
 
       -- * Layout of boxes
 
-    , (<>)
+    , (Text.PrettyPrint.Boxes.<>)
     , (<+>)
     , hcat
     , hsep
