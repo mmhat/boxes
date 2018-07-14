@@ -85,7 +85,7 @@ import Prelude hiding ( (<>), Word )
 import Prelude hiding (Word)
 #else
 import Data.Foldable (Foldable (foldr))
-import Data.Monoid hiding (Monoid, mappend, mempty)
+import Data.Monoid (Monoid, mappend, mempty)
 import Prelude hiding (foldr)
 #endif
 import Data.Foldable (toList)
